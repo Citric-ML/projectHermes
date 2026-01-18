@@ -3,6 +3,8 @@ Converged Projection + A* Test
 ------------------------------
 Merges static and heuristic projections with bounds checking,
 then runs A* pathfinding from one side to the other.
+------------------------------
+***Change this later so that it sends directional instructions to the arduino***
 """
 
 from collections import defaultdict
@@ -103,6 +105,54 @@ def visualize(cost_map, path=None):
                 row += "."
         print(row)
 
+# ==========================
+# PATH TO DIRECTION COMMANDS
+# ==========================
+
+def path_to_directions(
+    path,
+    cell_size=1.0,        # meters per grid cell
+    speed=0.5             # meters per second (assumed cruise)
+):
+    """
+    Converts a list of (x, y) grid coordinates into motion commands.
+
+    Returns:
+        List of dicts:
+        {
+            "yaw_deg": float,
+            "duration_s": float,
+            "vertical": int
+        }
+    """
+    if not path or len(path) < 2:
+        return []
+
+    commands = []
+
+    for (x0, y0), (x1, y1) in zip(path[:-1], path[1:]):
+        dx = (x1 - x0) * cell_size
+        dy = (y1 - y0) * cell_size
+
+        distance = math.hypot(dx, dy)
+        if distance == 0:
+            continue
+
+        # World-frame yaw (0° = +x, CCW positive)
+        yaw_rad = math.atan2(dy, dx)
+        yaw_deg = math.degrees(yaw_rad)
+
+        duration = distance / speed
+
+        commands.append({
+            "yaw_deg": round(yaw_deg, 2),
+            "duration_s": round(duration, 2),
+            "vertical": 0   # placeholder (no z-planning yet)
+        })
+
+    return commands
+
+
 # =========================
 # MAIN TEST
 # =========================
@@ -123,4 +173,14 @@ if __name__ == "__main__":
 
     print("\n=== CONVERGED COST MAP WITH PATH ===\n")
     visualize(cost_map, path=path)
-    print("\nPath coordinates:", path)
+
+    print("\nPath coordinates:")
+    print(path)
+
+    directions = path_to_directions(path)
+
+    print("\n=== GENERATED DIRECTION COMMANDS ===\n")
+    for i, cmd in enumerate(directions):
+        print(f"{i:02d}: yaw={cmd['yaw_deg']}°, "
+              f"time={cmd['duration_s']}s, "
+              f"vertical={cmd['vertical']}")
