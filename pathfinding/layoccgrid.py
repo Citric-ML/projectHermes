@@ -145,11 +145,6 @@ def promote_static_cells(layered_grid,
 
 #combines the two layered occupancy grids to form a combined weight projection for A*
 class CombinedOccupancyProjection:
-    """
-    Combines static and dynamic occupancy grids into a single
-    cost map suitable for A*.
-    """
-
     def __init__(self, static_grid, dynamic_grid,
                  static_weight=1000.0,
                  dynamic_weight=20.0,
@@ -190,8 +185,8 @@ class CombinedOccupancyProjection:
 
 
 '''
----TESTING---
-'''
+---TESTING---(commented out bc it doesn't need to run)
+
 import random
 import time
 import math
@@ -264,7 +259,6 @@ def test_random_projection(num_observations=50, repeat_for_static=5):
     print("\n--- COMBINED COST MAP ---")
     for (x, y), cost in cost_map.items():
         print(f"Cell ({x},{y}): cost={cost:.2f}")
-
     # 2D ASCII visualization
     print("\n--- 2D GRID VISUALIZATION ---")
     # Determine bounds
@@ -289,8 +283,4 @@ def test_random_projection(num_observations=50, repeat_for_static=5):
             else:
                 row += "."
         print(row)
-
-
-
-# Run the test
-test_random_projection()
+test_random_projection()'''
