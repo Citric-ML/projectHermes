@@ -49,6 +49,8 @@ class HeuristicProjection:
     #------------------------------
     #heuristic expansion algorithms
     #------------------------------
+    #this one is kinda pointless ngl, might just comment it out for now
+    '''
     def _apply_morphological_dilation(self):
         for (x, y) in self.static_grid.grid:
             for nx, ny in self._neighbors(x, y, self.dilation_radius):
@@ -62,8 +64,8 @@ class HeuristicProjection:
                     continue
 
                 cost = self.dilation_cost * (1 - d / self.dilation_radius)
-                self.heuristic_cost[(nx, ny)] += max(cost, 0)
-
+                self.heuristic_cost[(nx, ny)] += max(cost, 0)'''
+    #(needs fine tuning, TOO conservative)
     def _apply_directional_extension(self):
         for (x, y), cell in self.static_grid.grid.items():
 
@@ -135,7 +137,7 @@ class HeuristicProjection:
 
                     self.heuristic_cost[(nx, ny)] += cost
 
-
+    #assumes consistent height metrics in neighboring cells
     def _apply_height_consistency(self):
         for (x, y), cell in self.static_grid.grid.items():
             z_range = cell["z_max"] - cell["z_min"]
@@ -155,6 +157,7 @@ class HeuristicProjection:
                             continue
 
                         self.heuristic_cost[(ex, ey)] += self.height_cost
+    #essentially creates a deteriorating confidence gradient around identified cells
     def _apply_uncertainty_halo(self):
         for (x, y) in self.static_grid.grid:
             for nx, ny in self._neighbors(x, y, self.halo_radius):
@@ -174,8 +177,7 @@ class HeuristicProjection:
     #--------------
     def build(self):
         self.heuristic_cost.clear()
-
-        self._apply_morphological_dilation()
+        #self._apply_morphological_dilation()
         self._apply_directional_extension()
         self._apply_height_consistency()
         self._apply_uncertainty_halo()
