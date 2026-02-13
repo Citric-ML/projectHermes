@@ -85,15 +85,73 @@ import time
 SERIAL_PORT = "/dev/serial0"
 BAUD_RATE = 115200
 
-def send_command_list(command_list):
-    with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1) as ser:
+class DroneController:
+
+    def __init__(self, command_list):
+        self.command_list = command_list
+        self.command_sent = False
+        self.ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.1)
         time.sleep(2)  # allow Arduino reset
 
-        ser.write(b"CMD_START\n")
+    def send_command_packet(self):
+        self.ser.write(b"CMD_START\n")
 
-        for angle, speed, duration in command_list:
+        for angle, speed, duration in self.command_list:
             line = f"{angle},{speed},{duration}\n"
-            ser.write(line.encode("utf-8"))
+            self.ser.write(line.encode("utf-8"))
 
-        ser.write(b"CMD_END\n")
-        ser.flush()
+        self.ser.write(b"CMD_END\n")
+        self.ser.flush()
+
+        print("Command packet sent")
+
+    def send_execute(self):
+        self.ser.write(b"EXECUTE\n")
+        self.ser.flush()
+        print("EXECUTE sent")
+
+    def send_reset(self):
+        self.ser.write(b"RESET\n")
+        self.ser.flush()
+        print("RESET sent")
+
+    def handle_state(self, state):
+
+        print(f"Arduino state: {state}")
+
+        if state == "IDLE":
+            if not self.command_sent and self.command_list:
+                self.send_command_packet()
+                self.command_sent = True
+
+        elif state == "READY":
+            self.send_execute()
+
+        elif state == "COMPLETE":
+            self.send_reset()
+            self.command_sent = False
+
+    def listen(self):
+        buffer = ""
+
+        while True:
+            if self.ser.in_waiting:
+                data = self.ser.read(self.ser.in_waiting).decode("utf-8")
+                buffer += data
+
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    line = line.strip()
+
+                    if line.startswith("STATE:"):
+                        state = line.split(":")[1]
+                        self.handle_state(state)
+
+            time.sleep(0.01)
+'''
+Usage:
+commands = build_command_list(path)
+
+controller = DroneController(commands)
+controller.listen()
+'''
