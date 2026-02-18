@@ -143,3 +143,56 @@ def project_to_grid(depth_map, drone_pose, camera_params=None):
             )
 
     return grid
+
+import time
+#this is meant to be one of three concurent threads running on the Pi
+def perception_loop(grid, get_drone_pose, get_direction):
+    """
+    Continuously updates the LayeredOccupancyGrid.
+
+    grid: LayeredOccupancyGrid instance
+    get_drone_pose(): returns (x, y, z)
+    get_direction(): returns (yaw_deg, pitch_deg)
+    """
+
+    print("Perception loop started.")
+
+    while True:
+        loop_start = time.time()
+
+        # 1. Capture frame
+        frame = capture_image()
+        if frame is None:
+            continue
+
+        # 2. Infer depth via MiDaS
+        depth_map = estimate_depth(frame)
+        if depth_map is None:
+            continue
+
+        # 3. Read sonar reference depth
+        sonar_depth = get_distance()
+        if sonar_depth is None:
+            continue
+
+        # 4. Compute scale
+        scale = compute_scale(depth_map, sonar_depth)
+        depth_map_scaled = depth_map * scale
+
+        # 5. Extract center depth (example MVP)
+        center_depth = depth_map_scaled[133, 133]
+
+        # 6. Get drone pose + direction
+        drone_pos = get_drone_pose()
+        direction = get_direction()
+
+        # 7. Update layered occupancy grid (raycast hit)
+        grid.update(drone_pos, direction, center_depth)
+
+        # Optional debug
+        # grid.debug_print()
+
+        loop_time = time.time() - loop_start
+        print(f"Perception loop time: {loop_time:.3f}s")
+
+        time.sleep(0.05)
