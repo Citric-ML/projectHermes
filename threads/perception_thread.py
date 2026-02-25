@@ -1,6 +1,12 @@
 from sensors.sonar import get_distance
 from sensors.camera import capture_image
 from Grid_building.layoccgrid import LayeredOccupancyGrid
+from Grid_building.layoccgrid import StaticOccupancyGrid
+from midas import DepthEstimator
+from arduino_comms import build_command_list
+from Grid_building.converged import buildpathcoords
+from arduino_comms import DroneController
+from Grid_building.layoccgrid import promote_static_cells
 
 #-----------------
 #Helper functiones
@@ -62,24 +68,10 @@ def compute_scale(depth_map, sonar_depth, pixel=(133, 133),
 
     return scale
 #--------------------------------
-#ML related stubs (work on later) URGENTTTTTTTTT!!!!1!!!!!11!
+#ML related stubs
 #--------------------------------
-def estimate_depth(image):
-    # Temporary placeholder depth map
-    return np.ones((256, 256), dtype=np.float32)
 
 def project_to_grid(depth_map, drone_pose, camera_params=None, sample_step=4):
-    """
-    Converts a SCALED(must go through compute_scale() first) depth map into a hypothesis LayeredOccupancyGrid.
-
-    Parameters:
-        depth_map (np.ndarray): 2D depth array (meters) from model.
-        drone_pose (dict): {x, y, z, yaw, pitch, roll}
-        camera_params (dict): camera configuration
-
-    Returns:
-        LayeredOccupancyGrid: hypothesis grid
-    """
     if depth_map is None:
         return None
 
@@ -112,7 +104,7 @@ def project_to_grid(depth_map, drone_pose, camera_params=None, sample_step=4):
             if not np.isfinite(depth) or depth <= 0:
                 continue
 
-            # Pixel → angle
+            # Pixel -> angle
             x_angle = ((col - cx) / cx) * (h_fov / 2)
             y_angle = ((row - cy) / cy) * (v_fov / 2)
 
@@ -136,55 +128,95 @@ def project_to_grid(depth_map, drone_pose, camera_params=None, sample_step=4):
 
     return grid
 
+
 import time
-#this is meant to be one of three concurent threads running on the Pi
-def perception_loop(grid, get_drone_pose, get_direction):
-    """
-    Continuously updates the LayeredOccupancyGrid.
 
-    grid: LayeredOccupancyGrid instance
-    get_drone_pose(): returns (x, y, z)
-    get_direction(): returns (yaw_deg, pitch_deg)
-    """
+def main_loop():
 
-    print("Perception loop started.")
+    print("System started.")
+
+    # Persistent systems
+    depth_estimator = DepthEstimator()
+    dynamic_grid = LayeredOccupancyGrid()
+    static_grid = StaticOccupancyGrid()
+    controller = DroneController()
 
     while True:
+
         loop_start = time.time()
 
-        # 1. Capture frame
+        # -------------------------------------------------
+        # 1. PERCEPTION
+        # -------------------------------------------------
+
         frame = capture_image()
         if frame is None:
+            controller.listen()
             continue
 
-        # 2. Infer depth via MiDaS
-        depth_map = estimate_depth(frame)
+        depth_map = depth_estimator.predict(frame)
         if depth_map is None:
+            controller.listen()
             continue
 
-        # 3. Read sonar reference depth
         sonar_depth = get_distance()
         if sonar_depth is None:
+            controller.listen()
             continue
 
-        # 4. Compute scale
         scale = compute_scale(depth_map, sonar_depth)
+        if scale is None:
+            controller.listen()
+            continue
+
         depth_map_scaled = depth_map * scale
 
-        # 5. Extract center depth (example MVP)
-        center_depth = depth_map_scaled[133, 133]
+        drone_pose = getdronepos()
 
-        # 6. Get drone pose + direction
-        drone_pos = get_drone_pose()
-        direction = get_direction()
+        hypothesis_grid = project_to_grid(
+            depth_map_scaled,
+            drone_pose=drone_pose,
+            camera_params=None,
+            sample_step=4
+        )
 
-        # 7. Update layered occupancy grid (raycast hit)
-        grid.update(drone_pos, direction, center_depth)
+        # -------------------------------------------------
+        # 2. MAPPING
+        # -------------------------------------------------
 
-        # Optional debug
-        # grid.debug_print()
+        dynamic_grid.merge(hypothesis_grid)
+        dynamic_grid.decay()
 
-        loop_time = time.time() - loop_start
-        print(f"Perception loop time: {loop_time:.3f}s")
+        promote_static_cells(
+            dynamic_grid,
+            static_grid
+        )
 
-        time.sleep(0.05)
+        # -------------------------------------------------
+        # 3. PLANNING
+        # -------------------------------------------------
+        #this function also builds the merged projection and heuristic one
+        path = buildpathcoords()
+
+        if path:
+            commands = build_command_list(path)
+            controller.update_commands(commands)
+
+        # -------------------------------------------------
+        # 4. COMMUNICATION
+        # -------------------------------------------------
+
+        controller.listen()
+
+        # -------------------------------------------------
+        # 5. LOOP TIMING
+        # -------------------------------------------------
+
+        elapsed = time.time() - loop_start
+        sleep_time = max(0.05 - elapsed, 0)
+        time.sleep(sleep_time)
+'''
+You need to do these things:
+1. Fix Astar so that it has a set goal and startpoint
+2. Write accelerometer logic for getdronepos(), put it in sensors
+'''
