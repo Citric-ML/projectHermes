@@ -109,6 +109,17 @@ class LayeredOccupancyGrid:
             if cell["occ"] > 0:
                 print(f"Cell ({gx}, {gy}): occ={cell['occ']:.2f}, "
                       f"z=[{cell['z_min']:.2f}, {cell['z_max']:.2f}]")
+    def decay(self, decay_rate=0.02):
+        to_delete = []
+
+        for key, cell in self.grid.items():
+            cell["confidence"] -= decay_rate
+
+            if cell["confidence"] <= 0:
+                to_delete.append(key)
+
+        for key in to_delete:
+            del self.grid[key]
                 
 grid = LayeredOccupancyGrid(cell_size=0.5)
 
