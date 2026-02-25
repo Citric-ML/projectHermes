@@ -68,7 +68,7 @@ def estimate_depth(image):
     # Temporary placeholder depth map
     return np.ones((256, 256), dtype=np.float32)
 
-def project_to_grid(depth_map, drone_pose, camera_params=None):
+def project_to_grid(depth_map, drone_pose, camera_params=None, sample_step=4):
     """
     Converts a SCALED(must go through compute_scale() first) depth map into a hypothesis LayeredOccupancyGrid.
 
@@ -79,9 +79,6 @@ def project_to_grid(depth_map, drone_pose, camera_params=None):
 
     Returns:
         LayeredOccupancyGrid: hypothesis grid
-
-    [Note to self: later on only sample every N pixels, use vectorization, and downscale depth map for performance if needed]
-    [Another note to self: grid.update() isn't using x/y/z_world, because right now LayeredOccupancyGrid() internally does raycasting based on direction/depth. Later this can be refactored to accept direct world hit coordinates if need be]
     """
     if depth_map is None:
         return None
@@ -104,43 +101,38 @@ def project_to_grid(depth_map, drone_pose, camera_params=None):
     v_fov = np.radians(camera_params["fov_vertical"])
 
     yaw = np.radians(drone_pose["yaw"])
-
     cos_yaw = np.cos(yaw)
     sin_yaw = np.sin(yaw)
 
-    for row in range(height):
-        for col in range(width):
+    for row in range(0, height, sample_step):
+        for col in range(0, width, sample_step):
 
             depth = depth_map[row, col]
 
             if not np.isfinite(depth) or depth <= 0:
                 continue
 
-            # ---- Proper angle mapping ----
+            # Pixel → angle
             x_angle = ((col - cx) / cx) * (h_fov / 2)
             y_angle = ((row - cy) / cy) * (v_fov / 2)
 
-            # ---- Direction vector (camera frame) ----
+            # Camera frame direction
             dx_cam = np.cos(y_angle) * np.sin(x_angle)
             dy_cam = np.sin(y_angle)
             dz_cam = np.cos(y_angle) * np.cos(x_angle)
 
-            # ---- Scale by depth ----
+            # Scale by depth
             x_cam = dx_cam * depth
             y_cam = dy_cam * depth
             z_cam = dz_cam * depth
 
-            # ---- Rotate into world frame (yaw only) ----
+            # Rotate into world frame (yaw only)
             x_world = drone_pose["x"] + (x_cam * cos_yaw - z_cam * sin_yaw)
+            y_world = drone_pose["y"] + y_cam
             z_world = drone_pose["z"] + (x_cam * sin_yaw + z_cam * cos_yaw)
-            y_world = drone_pose["y"] + y_cam  # assuming flat roll
 
-            # ---- Update grid using world-space hit ----
-            grid.update(
-                drone_pos=(drone_pose["x"], drone_pose["z"], drone_pose["y"]),
-                direction_deg=(drone_pose["yaw"], drone_pose["pitch"]),
-                depth=depth
-            )
+            #Use direct world coordinate update
+            grid.update_world_hit(x_world, y_world, z_world)
 
     return grid
 
