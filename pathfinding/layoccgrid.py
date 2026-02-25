@@ -120,6 +120,24 @@ class LayeredOccupancyGrid:
 
         for key in to_delete:
             del self.grid[key]
+    def update_world_hit(self, x_hit, y_hit, z_hit):
+
+        if not Bounds.within_hard_bounds(x_hit, y_hit, z_hit):
+            return
+
+        Bounds.update_observed_bounds(x_hit, y_hit, z_hit)
+
+        gx, gy = self._world_to_grid(x_hit, y_hit)
+        cell = self.grid[(gx, gy)]
+
+        cell["occ"] = min(1.0, cell["occ"] + 0.2)
+        cell["count"] += 1
+        cell["confidence"] = min(1.0, cell["confidence"] + 0.1)
+
+        if cell["z_min"] is None or z_hit < cell["z_min"]:
+            cell["z_min"] = z_hit
+        if cell["z_max"] is None or z_hit > cell["z_max"]:
+            cell["z_max"] = z_hit
                 
 grid = LayeredOccupancyGrid(cell_size=0.5)
 
