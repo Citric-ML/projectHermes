@@ -3,10 +3,12 @@ from sensors.camera import capture_image
 from Grid_building.layoccgrid import LayeredOccupancyGrid
 from Grid_building.layoccgrid import StaticOccupancyGrid
 from midas import DepthEstimator
-from arduino_comms import build_command_list
+from arduino_communication import build_command_list
 from Grid_building.converged import buildpathcoords
-from arduino_comms import DroneController
+from arduino_communication import DroneController
 from Grid_building.layoccgrid import promote_static_cells
+from sensors.accelerometer import MPU6050
+from sensors.accelerometer import IMUTracker
 
 #-----------------
 #Helper functiones
@@ -130,13 +132,16 @@ def project_to_grid(depth_map, drone_pose, camera_params=None, sample_step=4):
 
 
 import time
-
+#this is meant to be one of three concurent threads running on the Pi
 def main_loop():
 
     print("System started.")
 
     # Persistent systems
     depth_estimator = DepthEstimator()
+    imu = MPU6050()
+    tracker = IMUTracker()
+    tracker.calibrate(imu) #sets biases for accelerometer
     dynamic_grid = LayeredOccupancyGrid()
     static_grid = StaticOccupancyGrid()
     controller = DroneController()
@@ -146,8 +151,17 @@ def main_loop():
         loop_start = time.time()
 
         # -------------------------------------------------
-        # 1. PERCEPTION
+        # 1. POSITION UPDATE
+
+        ax, ay, az = imu.get_accel()
+        gx, gy, gz = imu.get_gyro()
+
+        tracker.update(ax, ay, az, gx, gy, gz)
+
+        current_pose = tracker.get_pose()
+        drone_pose = current_pose
         # -------------------------------------------------
+        # 2. PERCEPTION
 
         frame = capture_image()
         if frame is None:
@@ -171,8 +185,6 @@ def main_loop():
 
         depth_map_scaled = depth_map * scale
 
-        drone_pose = getdronepos()
-
         hypothesis_grid = project_to_grid(
             depth_map_scaled,
             drone_pose=drone_pose,
@@ -182,7 +194,6 @@ def main_loop():
 
         # -------------------------------------------------
         # 2. MAPPING
-        # -------------------------------------------------
 
         dynamic_grid.merge(hypothesis_grid)
         dynamic_grid.decay()
@@ -194,8 +205,8 @@ def main_loop():
 
         # -------------------------------------------------
         # 3. PLANNING
-        # -------------------------------------------------
-        #this function also builds the merged projection and heuristic one
+
+        #this function also builds the merged projection
         path = buildpathcoords()
 
         if path:
@@ -204,13 +215,11 @@ def main_loop():
 
         # -------------------------------------------------
         # 4. COMMUNICATION
-        # -------------------------------------------------
 
         controller.listen()
 
         # -------------------------------------------------
         # 5. LOOP TIMING
-        # -------------------------------------------------
 
         elapsed = time.time() - loop_start
         sleep_time = max(0.05 - elapsed, 0)
@@ -218,5 +227,4 @@ def main_loop():
 '''
 You need to do these things:
 1. Fix Astar so that it has a set goal and startpoint
-2. Write accelerometer logic for getdronepos(), put it in sensors
 '''
