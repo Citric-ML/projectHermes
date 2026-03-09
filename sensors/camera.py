@@ -1,9 +1,3 @@
-'''
-NOTE: This is meant to run on the following hardware:
--Raspberry Pi 2W zero
--Raspberry Pi Camera Module 3 (connected using HBV-Raspberry-150FPC
-'''
-
 import subprocess
 import time
 from datetime import datetime
@@ -17,7 +11,7 @@ def capture_image():
     filename = IMAGE_DIR / f"frame_{timestamp}.jpg"
     #250x250 so it's suitable for model
     command = [
-        "libcamera-still",
+        "rpicam-still",
         "-o", str(filename),
         "--width", "250",
         "--height", "250",
