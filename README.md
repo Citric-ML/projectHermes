@@ -17,9 +17,9 @@ The Pathfinding algorithm is split into 3 main projections; those being the dyna
 ### Inter-Microcontroller Communication
 There are two microcontrollers intended for the Hermes system, those being the Raspberry Pi 2W (but can be any model) as well as the Arduino Nano (but can be any model). This is facilitated by the I2C ICC Logic Level Shifter, which converts the 3.3v signal of the Pi to a 5v format readable to the arduino. Via this bridge, the Arduino sends a variety of states (idle, ready, executing, complete) pertaining to the motors. The Pi, receiving these states, can wait to send a command to the Arduino, or can override states.
 ## GPIO Pinout
-GPIO 2: SDA on MPU6050
-GPIO 3: SCL on MPU6050
-GPIO 23: TX on US-100
-GPIO 24: RX on US-100
-GPIO 14: HV3 on I2C IIC
-GPIO 15: HV2 on I2C IIC
+- GPIO 2: SDA on MPU6050
++ GPIO 3: SCL on MPU6050
+* GPIO 23: TX on US-100
+- GPIO 24: RX on US-100
++ GPIO 14: HV3 on I2C IIC
+* GPIO 15: HV2 on I2C IIC
